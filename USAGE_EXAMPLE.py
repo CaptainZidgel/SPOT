@@ -7,7 +7,7 @@ IDs = spot.GET_IDs('76561198098770013')#MAKE THIS YOUR PROFILE OR STEAM64.
 
 print("Fetching")
 #If you want to download/update downloaded files:
-#fetcher = Fetcher('file', IDs, skip_init=False, save_directory="Z:/Projects/SPOT/dump/yourname")
+#fetcher = Fetcher(sink='file', IDs=IDs, skip_init=False, save_directory="Z:/Projects/SPOT/dump/yourname")
 #logs = fetcher.fetch(do_progress_bar=False, do_file_return=True)
 
 #If you only want to work with that you already have downloaded
