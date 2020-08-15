@@ -1,29 +1,41 @@
-import logfetch
-import spot
+from spot import Fetcher, spot
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-IDs = spot.GET_IDs('Steam64 or profile link') #76561198098770013 -> Zidg
+IDs = spot.GET_IDs('76561198098770013')#MAKE THIS YOUR PROFILE OR STEAM64.
 
 print("Fetching")
-fetcher = logfetch.Fetcher('file', IDs['64'], skip_init=False, save_directory="dump/yourname")
-logs = fetcher.fetch(do_progress_bar=False, do_file_return=True)
+#If you want to download/update downloaded files:
+#fetcher = Fetcher('file', IDs, skip_init=False, save_directory="Z:/Projects/SPOT/dump/yourname")
+#logs = fetcher.fetch(do_progress_bar=False, do_file_return=True)
+
+#If you only want to work with that you already have downloaded
+fetcher = Fetcher(skip_init=True, save_directory="Z:/Projects/SPOT/dump/zidgel")
+logs = fetcher.from_dir()
 
 print("Analyzing")
 e = spot.Extract(IDs)
-p = spot.Plotter(logs)
-approver = spot.Approver(IDs, p, spot.PLAYEDFULL, doLog=False)
+plotter = spot.Plotter(logs)
+approver = spot.Approver(IDs, plotter, spot.PLAYEDFULL, doLog=True)
 approver.Finalize()
 
-p.plot(e.DPM, method="mean", period="weekly", shade_seasons=True)
+#p.plot(e.DPM, method="mean", period="weekly", shade_seasons=False)
 
+fig, (ax1, ax2, ax3) = plt.subplots(3)
 
-'''
-for manually plotting, get x,y values like this: (this is not the comprehensive code you would write for matplotlib, this is a partial example for those who understand it)
-dpm = plotter.get_timestamped_values(e.DPM, start=datetime(year=2020, month=1, day=1))
-scoutweeklydpm = a.resample(dpm)
-ax1.plot(scoutweeklydpm.index, scoutweeklydpm)
-ax1.set_ylabel("Avg Weekly DPM")
-ax1.set_xlabel("Date")
-'''
+dpm = plotter.get_timestamped_values(e.DPM_SCOUT, start=datetime(2019, 1, 1))
+scoutweeklydpm = plotter.resample(dpm)
+ax1.plot(scoutweeklydpm.index, scoutweeklydpm) #Resampling requires a value to resample by, so you only need to pass scoutweeklydpm (the returned value) instead of scoutweeklydpm.val. Most other stats you use .val, i think
+ax1.set_ylabel("Avg Weekly Scout DPM")
+
+expanding = dpm.expanding().mean()
+ax2.plot(expanding.index, expanding.val)
+ax2.set_ylabel("Expanding Window Scout DPM")
+
+wl = plotter.get_timestamped_values(e.WIN, start=datetime(2019, 1, 1)).expanding(50).mean()
+ax3.plot(wl.index, wl.val)
+ax3.set_ylim(0.0, 1.0)
+ax3.set_ylabel("Expanding Window Win%")
+
+fig.show()

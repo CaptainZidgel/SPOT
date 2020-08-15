@@ -3,11 +3,9 @@ import ratelimit
 import json
 import os
 import sys
-from progress import printProgressBar #From stackoverflow https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
+from .progress import printProgressBar #From stackoverflow https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
 
 non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), 0xfffd) #stackoverflow
-
-save_directory = "dump"
 
 class Fetcher:
         """
@@ -16,11 +14,20 @@ class Fetcher:
         'sink' is either file or object, which is where to save logs in fetch()
         sinking to a file should be done ahead of time before processing, probably
         sinking to an object will also take a lot of time and should only be done with a limited log range
-        param earliest: Earliest log to include (inclusive)
-        param latest: Latest log to include (inclusive)
+        precondition is a lambda for filtering which logs to download (you can do more comprehensive filtering when choosing what logs to extract data from, later)
+        * params you might be interested in:
+        * * id   -  so you can choose not to download anything before the first game of a season (by log ID)
+        * * date - (epoch timestamp), so you can choose not to download anything outside of a season's datebounds (by date)
+         * example: lambda l: datetime.fromtimestamp(l['date']) < datetime(2019, 6, 30) #(The last day of ESEA)
+         * example: 12 <= l['players'] <= 15 #(Filters out explicitly non 6s games
+        * Presets: "6s" is the above lambda (this is not a replacement for using an Approver)
         """
-        def __init__(self, sink, ID64, earliest=0, latest=999999999, save_directory=save_directory, skip_init=False):
+        def __init__(self, sink='file', IDs=None, save_directory="dump", skip_init=False, precondition=None):
                 self.save_directory = save_directory
+                if precondition == None:
+                        precondition = lambda l: True
+                elif precondition == "6s":
+                        precondition = lambda l: 12 <= l['players'] <= 15
                 if sink == 'file':
                         self.sink = 'file'
                         if not os.path.isdir(save_directory):
@@ -30,11 +37,12 @@ class Fetcher:
                 else:
                         raise Exception("Unknown sink: use: `file` or `object`")
                 if not skip_init:
+                        assert IDs
                         if not os.path.isdir(save_directory):
                                 os.mkdir(save_directory)
                                 print("Creating dir {}".format(save_directory))
-                        logs = self.get_big_list(ID64)
-                        self.all = [l for l in logs if earliest <= l['id'] <= latest and 12 <= l['players'] <= 15]
+                        logs = self.get_big_list(IDs['64'])
+                        self.all = [l for l in logs if precondition(l)]
                 else:
                         self.all = []
 

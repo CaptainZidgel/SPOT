@@ -1,5 +1,4 @@
-import logfetch
-import tf2seasons
+from .tf2seasons import tf2seasons
 import pandas as pd
 import matplotlib.pyplot as plt
 from statistics import mean
@@ -16,6 +15,7 @@ def GET_IDs(profile):
     steam1 = SteamID(steam64).as_steam2
     return {'64': steam64, '3': steam3, '1': steam1}
 
+tf2seasons = tf2seasons()
 def GET_SEASON(identifier, key=None):
     for s in tf2seasons.all_seasons:
         if s['label'] == identifier:
@@ -234,6 +234,17 @@ class Extract:
         for classes in log['players'][self.ID(log)]['class_stats']:
             if classes['type'] == 'soldier':
                 return classes['dmg'] / (classes['total_time'] / 60)
+
+    @Alias("Win%")
+    def WIN(self, log):
+        j = log
+        me = self.ID(log)
+        if j['teams']['Red']['score'] > j['teams']['Blue']['score'] and j['players'][me]['team'] == "Red":
+          return 1
+        elif j['teams']['Red']['score'] < j['teams']['Blue']['score'] and j['players'][me]['team'] == "Blue":
+          return 1
+        else:
+          return 0
 
     def KD(self):
         return float(log['players'][self.ID(log)]['kpd'])
