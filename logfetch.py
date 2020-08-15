@@ -9,22 +9,6 @@ non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), 0xfffd) #stackov
 
 save_directory = "dump"
 
-@ratelimit.sleep_and_retry
-@ratelimit.limits(calls=30, period=1)
-def get_detailed(id):
-	r = requests.get("http://logs.tf/api/v1/log/{}".format(id))
-	if r.status_code != 200:
-		print("Unexpected status code {} for log {}".format(r.status_code, id))
-	return r.json()
-
-def get_big_list(me64):
-        """
-        Get all the log ids for the provided ID
-        """
-        r = requests.get("http://logs.tf/api/v1/log?player={}&limit={}&offset={}".format(me64, 10000, 0))
-        return r.json()["logs"]
-
-
 class Fetcher:
         """
         The Fetcher object is a mildly complex solution to a simple problem: How to download TF2 logs
@@ -40,16 +24,27 @@ class Fetcher:
                 if sink == 'file':
                         self.sink = 'file'
                         if not os.path.isdir(save_directory):
-                                os.mkdir(save_directory)
+                                os.makedirs(save_directory)
                 elif sink == 'object':
                         self.sink = 'object'
                 else:
                         raise Exception("Unknown sink: use: `file` or `object`")
                 if not skip_init:
-                        logs = get_big_list(ID64)
+                        if not os.path.isdir(save_directory):
+                                os.mkdir(save_directory)
+                                print("Creating dir {}".format(save_directory))
+                        logs = self.get_big_list(ID64)
                         self.all = [l for l in logs if earliest <= l['id'] <= latest and 12 <= l['players'] <= 15]
                 else:
                         self.all = []
+
+        def get_big_list(self, me64, limit=10000, offset=0):
+                """
+                Get all the log ids for the provided ID
+                """
+                req = "http://logs.tf/api/v1/log?player={}&limit={}&offset={}".format(me64, limit, offset)
+                r = requests.get(req)
+                return r.json()["logs"]
                 
         def fetch(self, do_progress_bar=False, do_file_return=False):
                 """
@@ -67,7 +62,7 @@ class Fetcher:
                                 printProgressBar(i+1, len(self.all), prefix="Progress", length=60)
                         if os.path.isfile(fn) and self.sink == "file":
                                 continue
-                        json_obj = get_detailed(id)               
+                        json_obj = self.get_detailed(id)               
                         if self.sink == "file":
                                 with open(fn, "w+", encoding="utf-8") as f:
                                         json.dump(json_obj, f, ensure_ascii=False, indent=4)
@@ -86,3 +81,11 @@ class Fetcher:
                                 log["id"] = file.split("_")[1].split(".")[0]
                                 l.append(log)
                 return l
+
+        @ratelimit.sleep_and_retry
+        @ratelimit.limits(calls=30, period=1)
+        def get_detailed(self, id):
+                r = requests.get("http://logs.tf/api/v1/log/{}".format(id))
+                if r.status_code != 200:
+                        print("Unexpected status code {} for log {}".format(r.status_code, id))
+                return r.json()

@@ -1,8 +1,34 @@
 import logfetch
-import datetime
+import tf2seasons
 import pandas as pd
 import matplotlib.pyplot as plt
 from statistics import mean
+from steam.steamid import SteamID
+from datetime import datetime
+
+def GET_IDs(profile):
+    steam64 = 0
+    if profile[0] == 'h': #link
+        steam64 = SteamID.from_url(profile).as_64
+    else: #simply a pasted steam64
+        steam64 = int(SteamID(profile))
+    steam3 = SteamID(steam64).as_steam3
+    steam1 = SteamID(steam64).as_steam2
+    return {'64': steam64, '3': steam3, '1': steam1}
+
+def GET_SEASON(identifier, key=None):
+    for s in tf2seasons.all_seasons:
+        if s['label'] == identifier:
+            if key == None:
+                return s['start'], s['end']
+            else:
+                return s[key]
+
+def Alias(alias): #https://stackoverflow.com/questions/10874432/possible-to-change-function-name-in-definition
+    def decorator(f):
+        f.__name__ = alias
+        return f
+    return decorator
 
 offclasses = {"pyro", "spy", "sniper", "engineer", "heavyweapons"}
 
@@ -31,37 +57,61 @@ class TimeRanges:
 PLAYEDHALF = 0
 PLAYEDFULL = 1
 class Approver:
-    def __init__(self, logs, steamID3, timeCondition):
-        self.player = steamID3
-        self.r = TimeRanges()
-        print("Approver beginning inspection {}".format(len(logs)))
-        self.logs = self.r.verify_logs(logs)    #filter out dupes
-        print("Approver filtering out dupes... {}".format(len(self.logs)))
-        self.logs = [l for l in self.logs if l['length'] > 600] #filter out short games
-        print("Approver filtering out short games... {}".format(len(self.logs)))
-        self.logs = [l for l in self.logs if self.InvalidFormat(l) == False] #filter out non-6s?
-        print("Approver filtering out non 6s games... {}".format(len(self.logs)))
-        self.logs = [l for l in self.logs if self.IsMedic(l) == False]
-        print("Approver filtering out medic games... {}".format(len(self.logs)))
-        self.logs = [l for l in self.logs if self.UsefulLog(l)]
-        print("Approver filtering out crappy logs.. {}".format(len(self.logs)))
-        if timeCondition == PLAYEDHALF:
-            self.logs = [l for l in self.logs if self.GetPlayedTime(l) > l['length'] / 2]
-            print("Approver filtering out games with less than half playtime... {}".format(len(self.logs)))
-        elif timeCondition == PLAYEDFULL:
-            self.logs = [l for l in self.logs if self.GetPlayedTime(l) == l['length']]
-            print("Approver filtering out games with less than full playtime... {}".format(len(self.logs)))
-        
-    def Result(self):
-        return self.logs
+    def __init__(self, IDs, plotter, timeCondition, filters={'short', 'dupes', 'non6s', 'medic'}, doLog=True, dont=False):
+        self.steam3 = IDs['3']
+        self.steam1 = IDs['1']
+        self.doLog = doLog
+        self.plotter = plotter
+        if dont: #dont is included as an option so you can access util functions yourself.
+            return
+        self.E = Extract(IDs)
+        self.logs = self.plotter.r_logs
+        print("Approver beginning inspection {}".format(len(self.logs))) if self.doLog else ''
+        if 'short' in filters:
+            self.FilterShortGames(600)
+        if 'dupes' in filters:
+            self.r = TimeRanges()
+            self.FilterDupes()
+        if 'non6s' in filters:
+            self.FilterInvalid()
+        if 'medic' in filters:
+            self.FilterMedic()
+        if not 'SAVE_funky_logs' in filters: #I get that this is a little odd but its not a real usecase, more of a debug thing.
+            self.FilterExplicitlyLackDmg()
+        self.FilterTimecond(timeCondition)
 
+    def Finalize(self):
+        self.plotter.logs = self.logs
+        
+    ########################IN-PLACE SELF.LOGS FILTERING###################
+    def FilterShortGames(self, period):
+        self.logs = [l for l in self.logs if l['info']['total_length'] > period] #filter out short games | NOTE: l['length'] exists in MOST logs, but I've run into problems in older logs, and afaik ['info']['total_length'] is in all logs.
+        print("Approver filtering out short games... {}".format(len(self.logs))) if self.doLog else ''
+    def FilterDupes(self):
+        self.logs = self.r.verify_logs(self.logs)    #filter out dupes
+        print("Approver filtering out dupes... {}".format(len(self.logs))) if self.doLog else ''
+    def FilterInvalid(self):
+        self.logs = [l for l in self.logs if self.InvalidFormat(l) == False] #filter out non-6s?
+        print("Approver filtering out non 6s games... {}".format(len(self.logs))) if self.doLog else ''
+    def FilterMedic(self):
+        self.logs = [l for l in self.logs if self.IsClass(l, 'medic', 70) == False]
+        print("Approver filtering out medic games... {}".format(len(self.logs))) if self.doLog else ''
+    def FilterExplicitlyLackDmg(self):
+        self.logs = [l for l in self.logs if self.UsefulLog(l)]
+        print("Approver filtering out logs we can find that explictly lack useful information (usually old games) (this is a basic filter with no false positives, but many false negatives).. {}".format(len(self.logs))) if self.doLog else ''
+    def FilterTimecond(self, timeCondition):
+        if timeCondition == PLAYEDHALF:
+            self.logs = [l for l in self.logs if self.GetPlayedTime(l) > l['info']['total_length'] / 2]
+            print("Approver filtering out games with less than half playtime... {}".format(len(self.logs))) if self.doLog else ''
+        elif timeCondition == PLAYEDFULL:
+            self.logs = [l for l in self.logs if self.GetPlayedTime(l) == l['info']['total_length']]
+            print("Approver filtering out games with less than full playtime... {}".format(len(self.logs))) if self.doLog else ''
+
+    #Util########Util functions take 1 log each, so you can access and write your own loops####
     def GetPlayedTime(self, log):
         total = 0
-        for classes in log['players'][self.player]['class_stats']:
-            try:
+        for classes in log['players'][self.E.ID(log)]['class_stats']:
                 total += classes['total_time']
-            except KeyError:
-                pass
         return total
 
     def DetermineFormatFromOffclasses(self, log):
@@ -115,55 +165,156 @@ class Approver:
         print("Can't find anything wrong. Likely 6s") if p else ''
         return False #Likely 6s
 
-    def IsMedic(self, log):
-        cs = ''
-        try:
-            cs = log['players'][self.player]['class_stats']
-        except KeyError:
-            print("[SPOT] Error... cannot find stats for you in this log {} <THAT MEANS IT COULD BE USING STEAM_1 FOR IDENTIFICATION. I DO NOT SUPPORT THIS, IF THIS HAPPENS FOR A LOT OF YOUR LOGS THEN REPORT IT AND I WILL TAKE CARE OF IT".format(log["id"]))
-            return
-        if len(cs) == 1 and cs[0]['type'] == 'medic':
+    def IsClass(self, log, myclass, percent_margin):
+        cs = log['players'][self.E.ID(log)]['class_stats']
+        if len(cs) == 1 and cs[0]['type'] == myclass:
             return True
         time = 0
-        for _class in log['players'][self.player]['class_stats']:
-            if _class['type'] == 'medic':
+        for _class in log['players'][self.E.ID(log)]['class_stats']:
+            if _class['type'] == myclass:
                 time += _class['total_time']
-        if time > 200:
+        if time > self.GetPlayedTime(log) * (percent_margin/100): #Played this class at least x% of the time
             return True
         return False
 
     def UsefulLog(self, log):
-        if log['info']['hasRealDamage']:
-            return True
-        else:
-            return False
+        try:
+            if log['info']['hasRealDamage']:
+                return True
+            else:
+                return False
+        except KeyError:
+            return True #Old logs that include dpm lack an indicator
 
-class Analyze:
-    def __init__(self, logs, steamid3, tc):
-        self.r_logs = logs
-        self.player = steamid3
-        self.APPROVER = Approver(logs, self.player, tc)
-        self.DPMdict = lambda log: {log['id']: log['players'][self.player]['dapm']}
-        self.DPMtup = lambda log: (log['id'], log['players'][self.player]['dapm'])
-        self.DPM = lambda log: log['players'][self.player]['dapm']
-        self.AVGDPM = lambda log: mean(self.DPM(log))
-        self.logs = self.APPROVER.Result()
+    def Custom(self, func):
+        self.logs = [l for l in self.logs if func(l)]
+        print("Applying user-provided filter function: Length now: {}".format(len(self.logs))) if self.doLog else ''
+
+class Extract:
+    def __init__(self, ids):
+        self.steam3 = ids['3']
+        self.steam1 = ids['1']
+        
+    def ID(self, log):
+        '''
+        I quite literally have no idea how to explain this problem, but some here's the deal:
+        some older logs use Steam1 instead of Steam3. Simple.
+        HOWEVER, some of these Steam1s use the WRONG "Universe" (STEAM_>X<) than what is given from manually converting.
+        I have opted to try and use replace to fix any key errors. I am bad at this.
+        '''
+        if self.steam3 in log['players']:
+            return self.steam3
+        else:
+            if self.steam1 in log['players']:
+                return self.steam1
+            else:
+                alt = ''
+                if self.steam1[6] == '0':
+                    alt = self.steam1.replace("_0", "_1")
+                elif self.steam1[6] == '1':
+                    alt = self.steam1.replace("_1", "_0")
+                if alt in log['players']:
+                    return alt
+                else:
+                    print("I don't know how to explain this to you but you're mcscrewed sorry. Please include the following line in an error report:")
+                    print(log['id'], alt, self.steam1)
+        
+    @Alias("DPM")
+    def DPM(self, log):
+        return log['players'][self.ID(log)]['dapm']
+    
+    @Alias("Scout DPM")
+    def DPM_SCOUT(self, log):
+        for classes in log['players'][self.ID(log)]['class_stats']:
+            if classes['type'] == 'scout':
+                return classes['dmg'] / (classes['total_time'] / 60)
+
+    @Alias("Soldier DPM")
+    def DPM_SOLDIER(self, log):
+        for classes in log['players'][self.ID(log)]['class_stats']:
+            if classes['type'] == 'soldier':
+                return classes['dmg'] / (classes['total_time'] / 60)
+
+    def KD(self):
+        return float(log['players'][self.ID(log)]['kpd'])
+
+class Plotter:
+    def __init__(self, logs):
+        self.r_logs = logs #This stays static, in case you want to start over.
+        self.logs = self.r_logs #This will be filled by approver
+
+        logs = sorted(self.logs, key=lambda l: l['info']['date'])
+        self.first = datetime.fromtimestamp(logs[0]['info']['date'])
+        self.last = datetime.fromtimestamp(logs[-1]['info']['date'])
 
     def get_timerange(self):
         return [d['info']['date'] for d in logs if d['length'] > 600 and d['players'][self.player]['dapm'] > 100]
 
-    def get_timestamped_values(self, stat):
+    def get_timestamped_values(self, stat, start=datetime(year=2000, month=1, day=1), end=datetime(year=3000, month=1, day=1)):
         '''
         Returns a pandas DatetimeIndexed Dataframe
         '''
-        dic = {'date': [pd.to_datetime(l['info']['date'], unit="s") for l in self.logs], 'val': [stat(l) for l in self.logs], "id": [str(l['id']) for l in self.logs]}
+        date_list = []
+        val_list = []
+        id_list = []
+        for l in self.logs:
+            t = datetime.fromtimestamp(l['info']['date'])
+            if start <= t <= end:
+                date_list.append(pd.to_datetime(l['info']['date'], unit="s"))
+                val_list.append(stat(l))
+                id_list.append(str(l['id']))
+        dic = {'date': date_list, 'val': val_list, 'id': id_list}
+        #dic = {'date': [pd.to_datetime(l['info']['date'], unit="s") for l in self.logs], 'val': [stat(l) for l in self.logs], "id": [str(l['id']) for l in self.logs]}
         #Creating a 1 dimensional dictionary here to convert to a dataframe. | NOTE: pd_to_datetime(blah, unit="s") ... blah is already a timestamp but pandas uses pseudo-typing or something so I'm converting it to a stamp, unit="s" means seconds. Don't know if that means unit as an input or as an output.
         df = pd.DataFrame({k: v for k, v in dic.items() if not k == "date"},
                           index = dic["date"])
         #Creating the actual dataframe from the dictionary, using date as an index.
         return df
 
-    def resample(self, values, period='W'):
-        return values.val.resample(period).mean()
+    def resample(self, values, method="mean", period='W'):
+        if method.lower() == "mean":
+            return values.val.resample(period).mean()
+        elif method.lower() == "sum":
+            return values.val.resample(period).sum()
+        else:
+            raise Exception("[SPOT] Resample Method must be mean or sum")
 
+    def shade_seasons(self, ax, doText=True):
+        for s in tf2seasons.all_seasons:
+            if self.first <= s['start'] <= self.last or self.first <= s['end'] <= self.last:
+                ax.axvspan(s['start'], s['end'], alpha=0.1, color="gray")
+                if doText:
+                    plt.text(s['start'], ax.get_ylim()[0], s['label'])
 
+    def set_bounds(self, ax, bounds):
+        if bounds == None:
+            ax.set_xlim(left=self.first, right=self.last)
+        else:
+            if bounds[0]:
+                self.first = bounds[0]
+            if bounds[1]:
+                self.last = bounds[1]
+            ax.set_xlim(left=self.first, right=self.last)
+                
+    def plot(self, stat, bounds=None, method="mean", period="weekly", shade_seasons=False):
+        '''
+        Creates a basic graph.
+        Stat is the stat from class Extract you would like to graph.
+        Bounds is the start/end of the graph. If not None, must be a tuple of datetimes, either (Start, End) or (None, datetime)
+        Method is mean or sum, used to resample.
+        Period is weekly or monthly.
+        shade_seasons will shade in TF2 seasons.
+        '''
+        assert period == "weekly" or period == "monthly"
+        vals = self.get_timestamped_values(stat)
+        resamp = self.resample(vals, method=method, period=period[0])
+        
+        fig, ax1 = plt.subplots()
+        ax1.plot(resamp.index, resamp)
+        ax1.set_xlabel("Date")
+        ax1.set_ylabel("{} {} {}".format(method, period, stat.__name__))
+        self.set_bounds(ax1, bounds)
+        if shade_seasons:
+            self.shade_seasons(ax1)
+
+        plt.show()
