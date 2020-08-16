@@ -78,6 +78,22 @@ sets your plotter's logs to the filtered logs
 ## Fetcher
 See USAGE_EXAMPLE.py for better docs and practical examples.  
 See comments in logfetch.py for more docs.  
+`fetcher = Fetcher(sink, IDs, save_directory="dump", skip_init=False, precondition=None)`  
+Creates a list of IDs to download, sets this list to self.all  
+sink is either 'file' or 'object' - object sinking does NOT retrieve any logs saved as a file and should only be used for small projects that don't use saved logs at all, like a small webapp.  
+skip_init, if set to True, will cause the object not to create a save directory or fetch a list of IDs to download.  
+precondition is a lambda log listings must meet to be included for download. If None, all logs from a player profile will be included.  
+log listings contain the parameters: id, title, map, date, views, players  
+
+`fetcher.Fetch(do_progress_bar=False, do_file_return=False)`  
+Fetch the logs from self.all. If sink is file, download to self.save_directory. If sink is object, return the object. If sink is file, do_file_return must be true for the method to return the logs (calls fetcher.from_dir())  
+
+Before calling fetcher.Fetch, you may be interested in filtering self.all with:  
+`fetcher.Filter_Time(start=start_date, end=end_date)` (as datetimes, each param optional)  
+`fetcher.Filter_Id(start=0, end=False)` log ID must be >= start, and <= end if end is not False  
+
+`fetcher.from_dir()`  
+Return json objects of all the logs from self.save_directory.
 
 ### Finer controls - these are what are called by the basic functions
 `fetcher.get_big_list(steam64ID, limit=10000, offset=0)`

@@ -290,12 +290,13 @@ class Plotter:
         else:
             raise Exception("[SPOT] Resample Method must be mean or sum")
 
-    def shade_seasons(self, ax, doText=True):
-        for lab, s in tf2seasons.all_seasons.items():
-            if self.first <= s['start'] <= self.last or self.first <= s['end'] <= self.last:
-                ax.axvspan(s['start'], s['end'], alpha=0.1, color="gray")
-                if doText:
-                    ax.text(s['start'], ax.get_ylim()[0], lab, rotation=90, fontsize='small')
+    def shade_seasons(self, *axes, doText=True):
+        for ax in axes:
+            for lab, s in tf2seasons.all_seasons.items():
+                if self.first <= s['start'] <= self.last or self.first <= s['end'] <= self.last:
+                    ax.axvspan(s['start'], s['end'], alpha=0.1, color="gray")
+                    if doText:
+                        ax.text(s['start'], ax.get_ylim()[0], lab, rotation=90, fontsize='small')
 
     def set_xbounds(self, ax, bounds):
         if bounds == None:

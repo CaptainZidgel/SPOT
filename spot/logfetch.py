@@ -3,6 +3,7 @@ import ratelimit
 import json
 import os
 import sys
+from datetime import datetime
 from .progress import printProgressBar #From stackoverflow https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
 
 non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), 0xfffd) #stackoverflow
@@ -70,7 +71,8 @@ class Fetcher:
                                 printProgressBar(i+1, len(self.all), prefix="Progress", length=60)
                         if os.path.isfile(fn) and self.sink == "file":
                                 continue
-                        json_obj = self.get_detailed(id)               
+                        json_obj = self.get_detailed(id)
+                        json_obj['id'] = id
                         if self.sink == "file":
                                 with open(fn, "w+", encoding="utf-8") as f:
                                         json.dump(json_obj, f, ensure_ascii=False, indent=4)
@@ -97,3 +99,12 @@ class Fetcher:
                 if r.status_code != 200:
                         print("Unexpected status code {} for log {}".format(r.status_code, id))
                 return r.json()
+
+        ##############filter funcs - these modify self.all in place - should be called after get_big_list but before fetch
+        def Filter_Time(self, start=datetime(2000, 1, 1), end=datetime(3000, 1, 1)):
+                '''Filter to logs that fit a date range, inclusively.'''
+                self.all = [l for l in self.all if start <= datetime.fromtimestamp(l['date']) <= end]
+
+        def Filter_Id(self, start=0, end=False):
+                '''Filter to logs that fit an ID range, inclusively.'''
+                self.all = [l for l in self.all if start <= l['id'] and not end or l['id'] <= end]
