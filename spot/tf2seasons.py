@@ -2,7 +2,7 @@ from datetime import datetime
 
 class tf2seasons:
     def __init__(self):
-        self.all_seasons = []
+        self.all_seasons = {}
         
         seasons_ESEA = {
             3: (datetime(2009, 5, 4), datetime(2009, 8, 2)),
@@ -48,9 +48,9 @@ class tf2seasons:
             }
 
         for num, ranges in seasons_ESEA.items():
-            d = {'start': ranges[0], 'end': ranges[1], 'label': "ESEA"+str(num)}
-            self.all_seasons.append(d)
+            label = "ESEA"+str(num)
+            self.all_seasons[label] = {'start': ranges[0], 'end': ranges[1] }
         for num, ranges in seasons_RGL.items():
-            d = {'start': ranges[0], 'end': ranges[1], 'label': "RGL"+str(num)}
-            self.all_seasons.append(d)
-            
+            label = "RGL"+str(num)
+            self.all_seasons[label] = {'start': ranges[0], 'end': ranges[1] }
+

@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-IDs = spot.GET_IDs('76561198098770013')#MAKE THIS YOUR PROFILE OR STEAM64.
+IDs = spot.GET_IDs('')#MAKE THIS YOUR PROFILE OR STEAM64.
 
 print("Fetching")
 #If you want to download/update downloaded files:
@@ -11,7 +11,7 @@ print("Fetching")
 #logs = fetcher.fetch(do_progress_bar=False, do_file_return=True)
 
 #If you only want to work with that you already have downloaded
-fetcher = Fetcher(skip_init=True, save_directory="Z:/Projects/SPOT/dump/zidgel")
+fetcher = Fetcher(skip_init=True, save_directory="Z:/log_dumps/zidgel")
 logs = fetcher.from_dir()
 
 print("Analyzing")
@@ -22,7 +22,7 @@ approver.Finalize()
 
 #p.plot(e.DPM, method="mean", period="weekly", shade_seasons=False)
 
-fig, (ax1, ax2, ax3) = plt.subplots(3)
+fig, (ax1, ax2, ax3, ax4) = plt.subplots(4)
 
 dpm = plotter.get_timestamped_values(e.DPM_SCOUT, start=datetime(2019, 1, 1))
 scoutweeklydpm = plotter.resample(dpm)
@@ -35,7 +35,21 @@ ax2.set_ylabel("Expanding Window Scout DPM")
 
 wl = plotter.get_timestamped_values(e.WIN, start=datetime(2019, 1, 1)).expanding(50).mean()
 ax3.plot(wl.index, wl.val)
-ax3.set_ylim(0.0, 1.0)
+ax3.set_ylim(0.2, 0.6)
 ax3.set_ylabel("Expanding Window Win%")
+
+ax4.plot(dpm.index, dpm.val) #No sort of resampling or rolling window. Just DPM plotted.
+ax4.set_ylabel("DPM per game.")
+
+#I highly recommend you normalize your bounds (limits) where applicable to keep graphs consistent.
+#In order to keep things working, the correct order of operations is:
+#1. Set y bounds
+#2. Set x bounds
+#3. Shade seasons, if you wish to do that. (It is essential this comes last if you intend to render labels)
+plotter.normalize_ybounds(ax1, ax2) #normalize_ybounds(*axes, margins=5, bot, top) - bot/top are overrides for setting bounds. If non existant, the bounds will be the minimum/maximum values of the included axes, +/- margins.
+for ax in (ax1, ax2, ax3, ax4):
+    plotter.set_xbounds(ax, (datetime(2019, 1, 1), None))   #Set the x limits for each axes to start at Jan 1st, 2019 and continue until the end of the data
+plotter.shade_seasons(ax2, doText=True) #Shade seasons for axis 2
+
 
 fig.show()

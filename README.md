@@ -4,6 +4,8 @@
 
 see USAGE_EXAMPLE.py for a usage example  
 
+![](example.png?raw=true)
+
 # Todo
 Docs
 
@@ -39,9 +41,12 @@ resample a dataframe by a method (mean or sum) in a period (w for weekly, m for 
 `data = plotter.shade_seasons(ax, doText=True)`  
 pass a matplotlib axis and it will add shading for TF2 competitive seasons. doText adds labels.  
 you can then plot with data.index as x, data as y  
-`plotter.set_bounds(ax, bounds)`  
+`plotter.set_xbounds(ax, bounds)`  
 ax is a matplotlib axis  
-bounds is a tuple, but one of the items can be `None`. First value is the left bound, second is the right bound. If a value is `None`, it defaults to the start/end of your data.
+bounds is a tuple, but one of the items can be `None`. First value is the left bound, second is the right bound. If a value is `None`, it defaults to the start/end of your data.  
+`plotter.normalize_ybounds(*axes, margins=5, bot, top)`  
+Set the ylimits for all the axes given. If bot/top are given, use those as bottom/top values.  
+Otherwise, use min/max of the total data, +/- margins.  
 
 
 ##### Class Approver  

@@ -17,8 +17,8 @@ def GET_IDs(profile):
 
 tf2seasons = tf2seasons()
 def GET_SEASON(identifier, key=None):
-    for s in tf2seasons.all_seasons:
-        if s['label'] == identifier:
+    for label, s in tf2seasons.all_seasons.items():
+        if label == identifier:
             if key == None:
                 return s['start'], s['end']
             else:
@@ -291,13 +291,13 @@ class Plotter:
             raise Exception("[SPOT] Resample Method must be mean or sum")
 
     def shade_seasons(self, ax, doText=True):
-        for s in tf2seasons.all_seasons:
+        for lab, s in tf2seasons.all_seasons.items():
             if self.first <= s['start'] <= self.last or self.first <= s['end'] <= self.last:
                 ax.axvspan(s['start'], s['end'], alpha=0.1, color="gray")
                 if doText:
-                    plt.text(s['start'], ax.get_ylim()[0], s['label'])
+                    ax.text(s['start'], ax.get_ylim()[0], lab, rotation=90, fontsize='small')
 
-    def set_bounds(self, ax, bounds):
+    def set_xbounds(self, ax, bounds):
         if bounds == None:
             ax.set_xlim(left=self.first, right=self.last)
         else:
@@ -306,6 +306,16 @@ class Plotter:
             if bounds[1]:
                 self.last = bounds[1]
             ax.set_xlim(left=self.first, right=self.last)
+
+    def normalize_ybounds(self, *axes, margins=5, bot=None, top=None):
+        uppers = [a.get_ylim()[1] for a in axes]
+        lowers = [a.get_ylim()[0] for a in axes]
+        if not bot:
+            bot = max(lowers)-margins
+        if not top:
+            top = max(uppers)+margins
+        for ax in axes:
+            ax.set_ylim(bottom=bot, top=top)
                 
     def plot(self, stat, bounds=None, method="mean", period="weekly", shade_seasons=False):
         '''
