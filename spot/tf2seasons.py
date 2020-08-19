@@ -43,8 +43,8 @@ class tf2seasons:
                     datetime(2020, 3, 27)),
                 3: (datetime(2020, 5, 19),
                     datetime(2020, 8, 6)),
-                4: (datetime(2020, 9, 1),
-                    datetime(2020, 11, 20))
+                4: (datetime(2020, 9, 15),
+                    datetime(2020, 12, 1))
             }
 
         for num, ranges in seasons_ESEA.items():
