@@ -81,7 +81,7 @@ class Approver:
         self.FilterTimecond(timeCondition)
 
     def Finalize(self):
-        self.plotter.logs = self.logs
+        self.plotter.logs = sorted(self.logs, key=lambda l: l['info']['date'])
         
     ########################IN-PLACE SELF.LOGS FILTERING###################
     def FilterShortGames(self, period):
@@ -258,9 +258,6 @@ class Plotter:
         self.first = datetime.fromtimestamp(logs[0]['info']['date'])
         self.last = datetime.fromtimestamp(logs[-1]['info']['date'])
 
-    def get_timerange(self):
-        return [d['info']['date'] for d in logs if d['length'] > 600 and d['players'][self.player]['dapm'] > 100]
-
     def get_timestamped_values(self, stat, start=datetime(year=2000, month=1, day=1), end=datetime(year=3000, month=1, day=1)):
         '''
         Returns a pandas DatetimeIndexed Dataframe
@@ -306,7 +303,7 @@ class Plotter:
                 self.first = bounds[0]
             if bounds[1]:
                 self.last = bounds[1]
-            ax.set_xlim(left=self.first, right=self.last)
+            ax.set_xlim(left=min(self.first, self.last), right=max(self.first, self.last))
 
     def normalize_ybounds(self, *axes, margins=5, bot=None, top=None):
         uppers = [a.get_ylim()[1] for a in axes]
