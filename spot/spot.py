@@ -218,7 +218,8 @@ class Extract:
                 else:
                     print("I don't know how to explain this to you but you're mcscrewed sorry. Please include the following line in an error report:")
                     print(log['id'], alt, self.steam1)
-        
+                    
+    ##These aliased functions will get the data from ONE log, to be returned for processing in a loop. This is fine in most cases.
     @Alias("DPM")
     def DPM(self, log):
         return log['players'][self.ID(log)]['dapm']
@@ -246,8 +247,12 @@ class Extract:
         else:
           return 0
 
-    def KD(self):
+    @Alias("Kill/Death")
+    def KD(self, log):
         return float(log['players'][self.ID(log)]['kpd'])
+
+    def Stat_List(self, stat, collection):
+        return [stat(l) for l in collection]
 
 class Plotter:
     def __init__(self, logs):
