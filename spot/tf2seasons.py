@@ -1,9 +1,15 @@
-from datetime import datetime
-
+from datetime import datetime, timedelta
+"""
+ESEA information was taken from the standings page for each season,
+which provides a time range of when the season "was"
+RGL information was taken from Trad 6s past events page for beginnings, and league table
+for endings. I set the ending to be the latest finals date I could find for the top divs.
+Beginnings do not include preseason.
+"""
 class tf2seasons:
-    def __init__(self):
+    def __init__(self, include_late=True):
         self.all_seasons = {}
-        
+
         seasons_ESEA = {
             3: (datetime(2009, 5, 4), datetime(2009, 8, 2)),
             4: (datetime(2009, 8, 9), datetime(2009, 11, 15)),
@@ -38,13 +44,13 @@ class tf2seasons:
 
         seasons_RGL = {
                 1: (datetime(2019, 6, 24),
-                    datetime(2019, 11, 19)),
+                    datetime(2019, 11, 20)),
                 2: (datetime(2020, 1, 7),
-                    datetime(2020, 3, 27)),
+                    datetime(2020, 4, 2)),
                 3: (datetime(2020, 5, 19),
-                    datetime(2020, 8, 6)),
-                4: (datetime(2020, 9, 15),
-                    datetime(2020, 12, 1))
+                    datetime(2020, 8, 15)),
+                4: (datetime(2020, 9, 14),
+                    datetime(2020, 12, 20))
             }
 
         for num, ranges in seasons_ESEA.items():
@@ -54,3 +60,12 @@ class tf2seasons:
             label = "RGL"+str(num)
             self.all_seasons[label] = {'start': ranges[0], 'end': ranges[1] }
 
+        if include_late:
+            for ranges in self.all_seasons.values():
+                ranges['end'] = ranges['end'] + timedelta(hours=25)
+        '''
+        Datetimes with no hour/minute specified default to midnight, morning of date. (local time)
+        TF2 games are played very late, and perhaps after midnight EST in the case of long finals.
+        include_late will add 25 hours to each end date. Otherwise, only add 23 hours.
+        I don't know why you would want to turn this off, but the option is there.
+        '''
