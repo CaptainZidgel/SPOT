@@ -1,8 +1,7 @@
 # STATS PLOTTED OVER TIME
-#### IN PROGRESS
-#### DOCS COMING SOON
+#### PLEASE DO NOT USE THIS AS A LIBRARY IT IS BAD
+#### IF YOU JUST WANT TO PLOT YOUR STATS, SEE USAGE_EXAMPLE.py.
 
-see USAGE_EXAMPLE.py for a usage example  
 
 ![](example.png?raw=true)
 

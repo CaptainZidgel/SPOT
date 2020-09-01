@@ -197,6 +197,7 @@ class Extract:
     def __init__(self, ids):
         self.steam3 = ids['3']
         self.steam1 = ids['1']
+        self.steam64 = ids['64']
         
     def ID(self, log):
         '''
