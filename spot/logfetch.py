@@ -93,7 +93,7 @@ class Fetcher:
                 return l
 
         @ratelimit.sleep_and_retry
-        @ratelimit.limits(calls=30, period=1)
+        @ratelimit.limits(calls=180, period=1)
         def get_detailed(self, id):
                 r = requests.get("http://logs.tf/api/v1/log/{}".format(id))
                 if r.status_code != 200:
