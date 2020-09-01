@@ -5,6 +5,9 @@ from statistics import mean
 from steam.steamid import SteamID
 from datetime import datetime
 
+class UserNotPresent(Exception):
+    pass
+
 def GET_IDs(profile):
     steam64 = 0
     if profile[0] == 'h': #link
@@ -216,8 +219,10 @@ class Extract:
                 if alt in log['players']:
                     return alt
                 else:
-                    print("I don't know how to explain this to you but you're mcscrewed sorry. Please include the following line in an error report:")
-                    print(log['id'], alt, self.steam1)
+                    raise UserNotPresent(
+                        "Missing user {} in log {}. If you believe this is an error, please include this line in an error report, with the following information: [ {} {} ]".format(
+                            self.steam64, log['id'], alt, self.steam1
+                        ))
                     
     ##These aliased functions will get the data from ONE log, to be returned for processing in a loop. This is fine in most cases.
     @Alias("DPM")
