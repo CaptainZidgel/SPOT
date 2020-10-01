@@ -241,6 +241,12 @@ class Extract:
         for classes in log['players'][self.ID(log)]['class_stats']:
             if classes['type'] == 'soldier':
                 return classes['dmg'] / (classes['total_time'] / 60)
+    
+    @Alias("Demo DPM")
+    def DPM_DEMO(self, log):
+        for classes in log['players'][self.ID(log)]['class_stats']:
+            if classes['type'] == 'demoman':
+                return classes['dmg'] / (classes['total_time'] / 60)
 
     @Alias("Win%")
     def WIN(self, log):
