@@ -1,22 +1,46 @@
-from .tf2seasons import tf2seasons
 import pandas as pd
 import matplotlib.pyplot as plt
 from statistics import mean
 from steam.steamid import SteamID
 from datetime import datetime
+from .tf2seasons import tf2seasons
 
 class UserNotPresent(Exception):
     pass
 
+class BadID(Exception):
+    pass
+
+def _genAlt(steam1):
+    '''
+    From the Steam Devs Wiki: https://developer.valvesoftware.com/wiki/SteamID
+    The value of X is 0 in VALVe's GoldSrc and Source Orange Box Engine games (For example, Counter Strike: Source), but newer Valve games such as Left 4 Dead, Left 4 Dead 2 and Alien Swarm have 1 as a value of X.
+    X being STEAM_X:Y:1234567...
+    I do not comprehend this issue, how can games affect a registration ID? Either way, your average conversion module like `steam.steamid` is going to give you a STEAM_1:Y. BAD!
+    '''
+    if steam1[6] == '0':
+        return steam1.replace("_0", "_1")
+    elif steam1[6] == '1': #I don't know if this is ever a case but lets do it in the reverse way just in case!
+        return steam1.replace("_1", "_0")
+
 def GET_IDs(profile):
-    steam64 = 0
-    if profile[0] == 'h': #link
+    """
+    steam.steamid doesn't actually have exceptions!!!
+    """
+    steam64 = None
+    if str(profile)[0] == 'h': #link
         steam64 = SteamID.from_url(profile).as_64
-    else: #simply a pasted steam64
-        steam64 = int(SteamID(profile))
+    elif str(profile)[0] == '7': #simply a pasted steam64
+        steam64 = SteamID(profile)
+    else:
+        raise BadID("Don't recognize this ID. Pass a steam64 or a community profile link")
+    if steam64 == None or isinstance(steam64, SteamID) and steam64.type == "Invalid":
+        raise BadID("Don't recognize this ID. Is it a valid profile? (Pass profile link or steam64)")
+    steam64 = int(steam64)
     steam3 = SteamID(steam64).as_steam3
     steam1 = SteamID(steam64).as_steam2
-    return {'64': steam64, '3': steam3, '1': steam1}
+    alt = _genAlt(steam1)
+    return {'64': steam64, '3': steam3, '1': steam1, '1a': alt}
 
 tf2seasons = tf2seasons()
 def GET_SEASON(identifier, key=None):
@@ -194,36 +218,31 @@ class Approver:
         print("Applying user-provided filter function: Length now: {}".format(len(self.logs))) if self.doLog else ''
 
 class Extract:
-    def __init__(self, ids):
-        self.steam3 = ids['3']
-        self.steam1 = ids['1']
-        self.steam64 = ids['64']
-        
+    """
+    Extract information from a log, based on a user's IDs (logs use multiple ID types across very long periods of time)
+    Supports combining alts gracefully, if you were interested in that for some reason.
+    Create as: e = spot.Extract(id_dictionary1)
+    These id_dictionaries come from spot.GET_IDs and are a var arg: e = spot.Extract(id_dict1, id_dict2)
+    """
+    def __init__(self, *id_sets):
+        self.ids = [{k:v for (k, v) in s.items()} for s in id_sets]
+        self.types = ["3", "1", "1a"] #steam64s arent used for player identification in logs
+
     def ID(self, log):
         '''
-        I quite literally have no idea how to explain this problem, but some here's the deal:
-        some older logs use Steam1 instead of Steam3. Simple.
-        HOWEVER, some of these Steam1s use the WRONG "Universe" (STEAM_>X<) than what is given from manually converting.
-        I have opted to try and use replace to fix any key errors. I am bad at this.
+        Get the ID to use for this log. (Current logs use Steam3, old logs use Steam1, some Steam1s have funky problems)
+        This uses a lot of list comps and is incomprehensible but a lot smoother IMO than the IF chain I was using before,
+        and it allows alt inclusion without recursion
         '''
-        if self.steam3 in log['players']:
-            return self.steam3
-        else:
-            if self.steam1 in log['players']:
-                return self.steam1
-            else:
-                alt = ''
-                if self.steam1[6] == '0':
-                    alt = self.steam1.replace("_0", "_1")
-                elif self.steam1[6] == '1':
-                    alt = self.steam1.replace("_1", "_0")
-                if alt in log['players']:
-                    return alt
-                else:
-                    raise UserNotPresent(
-                        "Missing user {} in log {}. If you believe this is an error, please include this line in an error report, with the following information: [ {} {} ]".format(
-                            self.steam64, log['id'], alt, self.steam1
-                        ))
+        all_ids = [s[t] for t in self.types for s in self.ids] #Creates a list of ids in order of precedence, with alts accounted for. example where A and B are multiple accounts: [a3, b3, a1, b1, a1a, b1a]
+        try:
+            id_in = next((_id for _id in all_ids if _id in log["players"])) #Return the first (and only) ID to be in the log.
+            return id_in
+        except StopIteration: #this means next() failed because nothing was generated
+            raise UserNotPresent(
+                "Missing user {} in log {}. If you believe this is an error, please include this line in an error report, with the following information: [ {} ;; {} ]".format(
+                    self.ids[0]['64'], log['id'], self.ids, all_ids
+                ))
                     
     ##These aliased functions will get the data from ONE log, to be returned for processing in a loop. This is fine in most cases.
     @Alias("DPM")

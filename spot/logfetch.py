@@ -83,13 +83,18 @@ class Fetcher:
                 elif do_file_return:
                         return self.from_dir()
                 
-        def from_dir(self):
+        def from_dir(self, limit=None, sort=False): #Limit mostly exists here for my own testing purposes so I don't have to read 8k logs
                 l = []
-                for file in os.listdir(self.save_directory):
+                opts = os.listdir(self.save_directory)
+                if limit:
+                        opts = opts[0:limit+1]
+                for file in opts:
                         with open(os.path.join(self.save_directory, file), 'r', encoding="utf8") as f:
                                 log = json.load(f)
                                 log["id"] = file.split("_")[1].split(".")[0]
                                 l.append(log)
+                if sort:
+                        l.sort(key=lambda x: x["info"]["date"])
                 return l
 
         @ratelimit.sleep_and_retry
