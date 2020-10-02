@@ -84,15 +84,25 @@ class TimeRanges:
 PLAYEDHALF = 0
 PLAYEDFULL = 1
 class Approver:
-    def __init__(self, IDs, plotter, timeCondition, filters={'short', 'dupes', 'non6s', 'medic'}, doLog=True, dont=False):
-        self.steam3 = IDs['3']
-        self.steam1 = IDs['1']
+    """
+    Some stock options for filtering garbage logs
+    also you can filter your own here if you want to, I'm not gonna stop you
+    a = Approver(
+        loglist: self explanator
+        extract: Your Extract object, will be necessary to determine what classes you're playing, etc
+        timeCondition: PLAYEDHALF or PLAYEDFULL, i.e. did you play at least 50% or 100% of the match?
+        filters: A set of things to take out. Probably best you leave this default.
+        doLog: Describe the approver's different actions and the length of log list after doing them.
+        dont: Dont do any filtering at all automatically. Let yourself do the hard work I already did for you.
+    )
+    Get the final log list: a.logs
+    """
+    def __init__(self, loglist, extract, timeCondition, filters={'short', 'dupes', 'non6s', 'medic'}, doLog=False, dont=False):
         self.doLog = doLog
-        self.plotter = plotter
         if dont: #dont is included as an option so you can access util functions yourself.
             return
-        self.E = Extract(IDs)
-        self.logs = self.plotter.r_logs
+        self.E = extract
+        self.logs = loglist
         print("Approver beginning inspection {}".format(len(self.logs))) if self.doLog else ''
         if 'short' in filters:
             self.FilterShortGames(600)
@@ -106,9 +116,6 @@ class Approver:
         if not 'SAVE_funky_logs' in filters: #I get that this is a little odd but its not a real usecase, more of a debug thing.
             self.FilterExplicitlyLackDmg()
         self.FilterTimecond(timeCondition)
-
-    def Finalize(self):
-        self.plotter.logs = sorted(self.logs, key=lambda l: l['info']['date'])
         
     ########################IN-PLACE SELF.LOGS FILTERING###################
     def FilterShortGames(self, period):
