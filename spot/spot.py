@@ -86,23 +86,17 @@ PLAYEDFULL = 1
 class Approver:
     """
     Some stock options for filtering garbage logs
-    also you can filter your own here if you want to, I'm not gonna stop you
-    a = Approver(
-        loglist: self explanator
-        extract: Your Extract object, will be necessary to determine what classes you're playing, etc
-        timeCondition: PLAYEDHALF or PLAYEDFULL, i.e. did you play at least 50% or 100% of the match?
-        filters: A set of things to take out. Probably best you leave this default.
-        doLog: Describe the approver's different actions and the length of log list after doing them.
-        dont: Dont do any filtering at all automatically. Let yourself do the hard work I already did for you.
-    )
-    Get the final log list: a.logs
+    You shouldn't have to use this.
+    Let the LogSeries do this work.
     """
-    def __init__(self, loglist, extract, timeCondition, filters={'short', 'dupes', 'non6s', 'medic'}, doLog=False, dont=False):
+    def __init__(self, doLog=False):
         self.doLog = doLog
-        if dont: #dont is included as an option so you can access util functions yourself.
-            return
+
+    def _config(self, loglist, extract):
         self.E = extract
         self.logs = loglist
+
+    def _do(self, timeCondition, filters={'short', 'dupes', 'non6s', 'medic'}):
         print("Approver beginning inspection {}".format(len(self.logs))) if self.doLog else ''
         if 'short' in filters:
             self.FilterShortGames(600)
@@ -112,11 +106,13 @@ class Approver:
         if 'non6s' in filters:
             self.FilterInvalid()
         if 'medic' in filters:
-            self.FilterMedic()
+            self.FilterOutGamesWherePlayerWasMedEquals(True)
+        if 'combat' in filters:
+            self.FilterOutGamesWherePlayerWasMedEquals(False)
         if not 'SAVE_funky_logs' in filters: #I get that this is a little odd but its not a real usecase, more of a debug thing.
             self.FilterExplicitlyLackDmg()
         self.FilterTimecond(timeCondition)
-        
+    
     ########################IN-PLACE SELF.LOGS FILTERING###################
     def FilterShortGames(self, minimum):
         self.logs = [l for l in self.logs if l['info']['total_length'] > minimum] #filter out short games | NOTE: l['length'] exists in MOST logs, but I've run into problems in older logs, and afaik ['info']['total_length'] is in all logs.
@@ -127,9 +123,9 @@ class Approver:
     def FilterInvalid(self):
         self.logs = [l for l in self.logs if self.InvalidFormat(l) == False] #filter out non-6s?
         print("Approver filtering out non 6s games... {}".format(len(self.logs))) if self.doLog else ''
-    def FilterMedic(self):
-        self.logs = [l for l in self.logs if self.IsClass(l, 'medic', 70) == False]
-        print("Approver filtering out medic games... {}".format(len(self.logs))) if self.doLog else ''
+    def FilterOutGamesWherePlayerWasMedEquals(self, isMed): #I have confused myself greatly
+        self.logs = [l for l in self.logs if self.IsClass(l, 'medic', 70) is not isMed]
+        print("Approver filtering out games where 'You were Medic == {}'... {}".format(isMed, len(self.logs))) if self.doLog else ''
     def FilterExplicitlyLackDmg(self):
         self.logs = [l for l in self.logs if self.UsefulLog(l)]
         print("Approver filtering out logs we can find that explictly lack useful information (usually old games) (this is a basic filter with no false positives, but many false negatives).. {}".format(len(self.logs))) if self.doLog else ''
@@ -273,7 +269,7 @@ class Extract:
 
     @Alias("Heals Per Minute")
     def MED_HPM(self, log):
-        return log["players"][self.ID(log)]["heal"] / self.GetPlayedTime(log, "medic")
+        return log["players"][self.ID(log)]["heal"] / (self.GetPlayedTime(log, "medic") / 60)
 
     @Alias("Win%")
     def WIN(self, log):
@@ -299,6 +295,21 @@ class LogSeries: #A data-y handle-y type-y thing-y
         self.logs = logs
 
         self.logs.sort(key=lambda l: l["info"]["date"])
+
+    def StdFilter(self, e, timeCondition, remove={"short", "dupes", "non6s", "medic"}, logging=False):
+        """
+        Some options to remove garbage games from the system.
+        You can pass your own set with these string options:
+        short - REMOVE games below 600 seconds
+        dupes - REMOVE dupes (usually caused by tf2c)
+        non6s - REMOVE non6s games
+        medic - REMOVE medic games
+        combat - REMOVE combat class games I.E. ONLY KEEP MEDIC GAMES
+        """
+        ap = Approver(doLog = logging)
+        ap._config(self.logs, e)
+        ap._do(timeCondition, filters=remove)
+        self.logs = ap.logs
 
     def timeseries(self, stat, start=datetime(year=1234, month=5, day=6), end=datetime(year=3456, month=7, day=8)):
         """

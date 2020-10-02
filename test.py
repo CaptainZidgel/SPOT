@@ -7,6 +7,11 @@ Zidgel = spot.GET_IDs("76561198098770013")
 zfetcher = Fetcher(skip_init = True, save_directory = os.path.join("Z:\log_dumps", str(Zidgel['64'])))
 ZidgelLogs = zfetcher.from_dir(sort=True)
 
+#My sincerest apologies to anyone reading this.
+sample_ids_med_dict = {"T": {2678678, 2678666, 2678653, 2676716, 2676707}, "F": {2678635, 2676699, 2669814, 2669789, 2669775, 2668817}} #ismedic, notismedic
+sample_ids_med = sample_ids_med_dict["T"] | sample_ids_med_dict["F"]
+samplelogs_med = zfetcher.from_dir(select=sample_ids_med)
+
 #I once downloaded Habib's 8k logs to compare with another player, logs date back to 2013 so he seems like a good pool of logs to use.
 Habib = spot.GET_IDs("76561198053621664")
 hfetcher = Fetcher(skip_init = True, save_directory = os.path.join("Z:\log_dumps", str(Habib['64'])))
@@ -34,3 +39,16 @@ class TestIDExtract(unittest.TestCase):
 
     def test_usernotfound(self):
         self.assertRaises(spot.UserNotPresent, zext.ID, HabibLogs[0]) #I am definitely not in whatever this log is
+
+class TestFilters(unittest.TestCase):
+    def test_no_medic(self):
+        ap = spot.Approver()
+        ap._config(samplelogs_med, zext)
+        ap._do(spot.PLAYEDHALF, filters={"medic"})
+        self.assertCountEqual(sample_ids_med_dict["F"], [int(l["id"]) for l in ap.logs])
+
+    def test_yes_medic(self):
+        ap = spot.Approver()
+        ap._config(samplelogs_med, zext)
+        ap._do(spot.PLAYEDHALF, filters={"combat"})
+        self.assertCountEqual(sample_ids_med_dict["T"], [int(l["id"]) for l in ap.logs])
