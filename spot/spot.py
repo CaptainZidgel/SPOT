@@ -237,7 +237,7 @@ class Extract:
                 "Missing user {} in log {}. If you believe this is an error, please include this line in an error report, with the following information: [ {} ;; {} ]".format(
                     self.ids[0]['64'], log['id'], self.ids, all_ids
                 ))
-
+        
     def GetPlayedTime(self, log, perclass=None):
         total = 0
         for classes in log['players'][self.ID(log)]['class_stats']:
@@ -251,6 +251,10 @@ class Extract:
                 return classes["dmg"] / (classes["total_time"] / 60)
     
     ##These aliased functions will get the data from ONE log, to be returned for processing in a loop. This is fine in most cases.
+    @Alias("Minutes in 6v6 games")
+    def MINUTES(self, log):
+        return self.GetPlayedTime(log) / 60
+    
     @Alias("DPM")
     def DPM(self, log):
         return log['players'][self.ID(log)]['dapm']
@@ -336,7 +340,7 @@ class LogSeries: #A data-y handle-y type-y thing-y
         """
         if method.lower() == "mean":
             return df.resample(period).mean()
-        elif method.lower() == "sun":
+        elif method.lower() == "sum":
             return df.resample(period).sum()
         else:
             raise Exception("[SPOT] Resample Method must be mean or sum")
