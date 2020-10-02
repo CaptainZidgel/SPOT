@@ -1,4 +1,4 @@
-from spot import Fetcher, spot
+from spot import Fetcher, PlotHelper, spot
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -24,5 +24,10 @@ ax1.plot(dpm.index, dpm.stats)
 
 dpm_weekly = logs.resample(dpm)
 ax2.plot(dpm_weekly.index, dpm_weekly.stats)
+
+p = PlotHelper(logs)
+p.shade_seasons(ax1, ax2)
+p.set_xbounds(ax1, ax2)
+p.normalize_ybounds(ax1, ax2, bot=150, top=400)
 
 fig.show()
