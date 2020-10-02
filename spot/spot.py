@@ -118,8 +118,8 @@ class Approver:
         self.FilterTimecond(timeCondition)
         
     ########################IN-PLACE SELF.LOGS FILTERING###################
-    def FilterShortGames(self, period):
-        self.logs = [l for l in self.logs if l['info']['total_length'] > period] #filter out short games | NOTE: l['length'] exists in MOST logs, but I've run into problems in older logs, and afaik ['info']['total_length'] is in all logs.
+    def FilterShortGames(self, minimum):
+        self.logs = [l for l in self.logs if l['info']['total_length'] > minimum] #filter out short games | NOTE: l['length'] exists in MOST logs, but I've run into problems in older logs, and afaik ['info']['total_length'] is in all logs.
         print("Approver filtering out short games... {}".format(len(self.logs))) if self.doLog else ''
     def FilterDupes(self):
         self.logs = self.r.verify_logs(self.logs)    #filter out dupes
@@ -135,19 +135,13 @@ class Approver:
         print("Approver filtering out logs we can find that explictly lack useful information (usually old games) (this is a basic filter with no false positives, but many false negatives).. {}".format(len(self.logs))) if self.doLog else ''
     def FilterTimecond(self, timeCondition):
         if timeCondition == PLAYEDHALF:
-            self.logs = [l for l in self.logs if self.GetPlayedTime(l) > l['info']['total_length'] / 2]
+            self.logs = [l for l in self.logs if self.E.GetPlayedTime(l) > l['info']['total_length'] / 2]
             print("Approver filtering out games with less than half playtime... {}".format(len(self.logs))) if self.doLog else ''
         elif timeCondition == PLAYEDFULL:
-            self.logs = [l for l in self.logs if self.GetPlayedTime(l) == l['info']['total_length']]
+            self.logs = [l for l in self.logs if self.E.GetPlayedTime(l) == l['info']['total_length']]
             print("Approver filtering out games with less than full playtime... {}".format(len(self.logs))) if self.doLog else ''
 
     #Util########Util functions take 1 log each, so you can access and write your own loops####
-    def GetPlayedTime(self, log):
-        total = 0
-        for classes in log['players'][self.E.ID(log)]['class_stats']:
-                total += classes['total_time']
-        return total
-
     def DetermineFormatFromOffclasses(self, log):
         '''
         Called from the InvalidFormat func as a last resort: If at least one person on each team
@@ -203,11 +197,8 @@ class Approver:
         cs = log['players'][self.E.ID(log)]['class_stats']
         if len(cs) == 1 and cs[0]['type'] == myclass:
             return True
-        time = 0
-        for _class in log['players'][self.E.ID(log)]['class_stats']:
-            if _class['type'] == myclass:
-                time += _class['total_time']
-        if time > self.GetPlayedTime(log) * (percent_margin/100): #Played this class at least x% of the time
+        time = self.E.GetPlayedTime(log, myclass)
+        if time >= self.E.GetPlayedTime(log) * (percent_margin/100): #Played this class at least x% of the time
             return True
         return False
 
@@ -250,7 +241,19 @@ class Extract:
                 "Missing user {} in log {}. If you believe this is an error, please include this line in an error report, with the following information: [ {} ;; {} ]".format(
                     self.ids[0]['64'], log['id'], self.ids, all_ids
                 ))
-                    
+
+    def GetPlayedTime(self, log, perclass=None):
+        total = 0
+        for classes in log['players'][self.ID(log)]['class_stats']:
+            if perclass == None or perclass == classes["type"]:
+                total += classes['total_time']
+        return total
+
+    def dpm_by_class(self, log, class_):
+        for classes in log["players"][self.ID(log)]["class_stats"]:
+            if classes["type"] == class_:
+                return classes["dmg"] / (classes["total_time"] / 60)
+    
     ##These aliased functions will get the data from ONE log, to be returned for processing in a loop. This is fine in most cases.
     @Alias("DPM")
     def DPM(self, log):
@@ -258,21 +261,19 @@ class Extract:
     
     @Alias("Scout DPM")
     def DPM_SCOUT(self, log):
-        for classes in log['players'][self.ID(log)]['class_stats']:
-            if classes['type'] == 'scout':
-                return classes['dmg'] / (classes['total_time'] / 60)
+        return self.dpm_by_class(log, "scout")
 
     @Alias("Soldier DPM")
     def DPM_SOLDIER(self, log):
-        for classes in log['players'][self.ID(log)]['class_stats']:
-            if classes['type'] == 'soldier':
-                return classes['dmg'] / (classes['total_time'] / 60)
+        return self.dpm_by_class(log, "soldier")
     
     @Alias("Demo DPM")
     def DPM_DEMO(self, log):
-        for classes in log['players'][self.ID(log)]['class_stats']:
-            if classes['type'] == 'demoman':
-                return classes['dmg'] / (classes['total_time'] / 60)
+        return self.dpm_by_class(log, "demoman")
+
+    @Alias("Heals Per Minute")
+    def MED_HPM(self, log):
+        return log["players"][self.ID(log)]["heal"] / self.GetPlayedTime(log, "medic")
 
     @Alias("Win%")
     def WIN(self, log):
@@ -292,6 +293,43 @@ class Extract:
     def Stat_List(self, stat, collection):
         return [stat(l) for l in collection]
 
+class LogSeries: #A data-y handle-y type-y thing-y
+    def __init__(self, logs):
+        self.r_logs = logs
+        self.logs = logs
+
+        self.logs.sort(key=lambda l: l["info"]["date"])
+
+    def timeseries(self, stat, start=datetime(year=1234, month=5, day=6), end=datetime(year=3456, month=7, day=8)):
+        """
+        Get the pandas time series of this data, with an optional start/end to crop the data.
+        Stat must be an Extract method.
+        """
+        date_list = []
+        val_list = []
+        id_list = []
+        for l in self.logs:
+            t = datetime.fromtimestamp(l["info"]["date"])
+            if start <= t <= end:
+                date_list.append(pd.to_datetime(l["info"]["date"], unit="s")) #unit means our epoch is in seconds (this is important to clarify, as javascript epochs are ms, for example).
+                val_list.append(stat(l))
+                id_list.append(str(l["id"]))
+        dic = {"date": date_list, "stats": val_list, "id": id_list}
+        df = pd.DataFrame({k:v for k, v in dic.items() if not k == "date"}, index = dic["date"])
+        return df
+
+    def resample(self, df, method="mean", period="w"):
+        """
+        Squish a dataframe by period ('w'eek, 'm'onth) by either finding the mean of period values or summing them up
+        df comes from LogSeries.timeseries()
+        """
+        if method.lower() == "mean":
+            return df.resample(period).mean()
+        elif method.lower() == "sun":
+            return df.resample(period).sum()
+        else:
+            raise Exception("[SPOT] Resample Method must be mean or sum")
+
 class Plotter:
     def __init__(self, logs):
         self.r_logs = logs #This stays static, in case you want to start over.
@@ -300,35 +338,6 @@ class Plotter:
         logs = sorted(self.logs, key=lambda l: l['info']['date'])
         self.first = datetime.fromtimestamp(logs[0]['info']['date'])
         self.last = datetime.fromtimestamp(logs[-1]['info']['date'])
-
-    def get_timestamped_values(self, stat, start=datetime(year=2000, month=1, day=1), end=datetime(year=3000, month=1, day=1)):
-        '''
-        Returns a pandas DatetimeIndexed Dataframe
-        '''
-        date_list = []
-        val_list = []
-        id_list = []
-        for l in self.logs:
-            t = datetime.fromtimestamp(l['info']['date'])
-            if start <= t <= end:
-                date_list.append(pd.to_datetime(l['info']['date'], unit="s"))
-                val_list.append(stat(l))
-                id_list.append(str(l['id']))
-        dic = {'date': date_list, 'val': val_list, 'id': id_list}
-        #dic = {'date': [pd.to_datetime(l['info']['date'], unit="s") for l in self.logs], 'val': [stat(l) for l in self.logs], "id": [str(l['id']) for l in self.logs]}
-        #Creating a 1 dimensional dictionary here to convert to a dataframe. | NOTE: pd_to_datetime(blah, unit="s") ... blah is already a timestamp but pandas uses pseudo-typing or something so I'm converting it to a stamp, unit="s" means seconds. Don't know if that means unit as an input or as an output.
-        df = pd.DataFrame({k: v for k, v in dic.items() if not k == "date"},
-                          index = dic["date"])
-        #Creating the actual dataframe from the dictionary, using date as an index.
-        return df
-
-    def resample(self, values, method="mean", period='W'):
-        if method.lower() == "mean":
-            return values.val.resample(period).mean()
-        elif method.lower() == "sum":
-            return values.val.resample(period).sum()
-        else:
-            raise Exception("[SPOT] Resample Method must be mean or sum")
 
     def shade_seasons(self, *axes, doText=True):
         for ax in axes:
