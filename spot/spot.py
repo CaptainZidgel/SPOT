@@ -254,7 +254,23 @@ class Extract:
     @Alias("Minutes in 6v6 games")
     def MINUTES(self, log):
         return self.GetPlayedTime(log) / 60
-    
+
+    @Alias("Scout Minutes (6s)")
+    def MINUTES_SCOUT(self, log):
+        return self.GetPlayedTime(log, "scout") / 60
+
+    @Alias("Soldier Minutes (6s)")
+    def MINUTES_SOLDIER(self, log):
+        return self.GetPlayedTime(log, "soldier") / 60
+
+    @Alias("Demo Minutes (6s)")
+    def MINUTES_DEMO(self, log):
+        return self.GetPlayedTime(log, "demoman") / 60
+
+    @Alias("Medic Minutes (6s)")
+    def MINUTES_MEDIC(self, log):
+        return self.GetPlayedTime(log, "medic") / 60
+    #*#*#*#*
     @Alias("DPM")
     def DPM(self, log):
         return log['players'][self.ID(log)]['dapm']
@@ -315,7 +331,7 @@ class LogSeries: #A data-y handle-y type-y thing-y
         ap._do(timeCondition, filters=remove)
         self.logs = ap.logs
 
-    def timeseries(self, stat, start=datetime(year=1234, month=5, day=6), end=datetime(year=3456, month=7, day=8)):
+    def timeseries(self, stat, start=datetime(year=1234, month=5, day=6), end=datetime(year=3456, month=7, day=8), safe=True, incl_ids=False, incl_zeroes=True):
         """
         Get the pandas time series of this data, with an optional start/end to crop the data.
         Stat must be an Extract method.
@@ -326,10 +342,14 @@ class LogSeries: #A data-y handle-y type-y thing-y
         for l in self.logs:
             t = datetime.fromtimestamp(l["info"]["date"])
             if start <= t <= end:
-                date_list.append(pd.to_datetime(l["info"]["date"], unit="s")) #unit means our epoch is in seconds (this is important to clarify, as javascript epochs are ms, for example).
-                val_list.append(stat(l))
-                id_list.append(str(l["id"]))
-        dic = {"date": date_list, "stats": val_list, "id": id_list}
+                val = stat(l)
+                if (not safe or not pd.isnull(val)) and (incl_zeroes or val != 0.0):
+                    val_list.append(val)
+                    date_list.append(pd.to_datetime(l["info"]["date"], unit="s")) #unit means our epoch is in seconds (this is important to clarify, as javascript epochs are ms, for example).
+                    id_list.append(l["id"])
+        dic = {"date": date_list, "stats": val_list}
+        if incl_ids:
+            dic["id"] = id_list
         df = pd.DataFrame({k:v for k, v in dic.items() if not k == "date"}, index = dic["date"])
         return df
 

@@ -2,3 +2,5 @@ dump/
 dist/
 __pycache__/
 _test_manual_dl_.py
+examples.py/
+docs/
